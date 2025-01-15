@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cards Against Humanity - Name Change Example</title>
+  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+<body>
+  <header>
+    <h1>Cards Against Humanity - Name Change Example</h1>
+  </header>
+
+  <!-- Scoreboard in top-right corner -->
+  <div id="scoreboard"></div>
+
+  <div class="container">
+    <!-- First time: we let them pick a name. If they refresh, they keep it (in cookie). -->
+    <section id="loginSection">
+      <label for="usernameInput">Username:</label>
+      <input type="text" id="usernameInput" placeholder="Enter a name..." />
+      <button id="joinBtn">Join</button>
+    </section>
+
+    <!-- Lobby area -->
+    <section id="playersSection" class="hidden">
+      <h2>Players</h2>
+      <ul id="playersList"></ul>
+      <button id="roundBtn" class="hidden">Start Round</button>
+
+      <!-- [NEW] Let the user rename themselves mid-game -->
+      <div id="renameArea">
+        <input type="text" id="renameInput" placeholder="New name" />
+        <button id="renameBtn">Change Name</button>
+      </div>
+    </section>
+
+    <!-- Game area -->
+    <section id="gameSection" class="hidden">
+      <div id="roundInfo">
+        <div id="blackCard" class="card blackcard"></div>
+        <div id="tzarBanner" class="hidden">
+          You are the Tzar. Pick a winner after others have played!
+        </div>
+      </div>
+
+      <!-- Not played yet -->
+      <div id="notPlayedYetArea" class="hidden">
+        <h4>Not played yet:</h4>
+        <ul id="notPlayedList"></ul>
+      </div>
+
+      <div id="statusMsg"></div>
+
+      <div id="handArea">
+        <h3>Your Hand</h3>
+        <div id="hand" class="cardGrid"></div>
+      </div>
+
+      <div id="tzarContainer" class="hidden">
+        <h3>All answers are in. Choose the best:</h3>
+        <div id="choices" class="cardGrid"></div>
+      </div>
+
+      <div id="playedCardsArea" class="hidden">
+        <h3>Answers (waiting for Tzar):</h3>
+        <div id="playedCards" class="cardGrid"></div>
+      </div>
+
+      <button id="nextRoundBtn" class="hidden">Next Round</button>
+    </section>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+
+    /***************************************************
+     * DOM Elements
+     ***************************************************/
+    const scoreboardDiv = document.getElementById('scoreboard');
+    const loginSection = document.getElementById('loginSection');
+    const usernameInput = document.getElementById('usernameInput');
+    const joinBtn = document.getElementById('joinBtn');
+
+    const playersSection = document.getElementById('playersSection');
+    const playersList = document.getElementById('playersList');
+    const roundBtn = document.getElementById('roundBtn');
+
+    const renameArea = document.getElementById('renameArea');
+    const renameInput = document.getElementById('renameInput');
+    const renameBtn = document.getElementById('renameBtn');
+
+    const gameSection = document.getElementById('gameSection');
+    const blackCardDiv = document.getElementById('blackCard');
+    const tzarBanner = document.getElementById('tzarBanner');
+    const notPlayedYetArea = document.getElementById('notPlayedYetArea');
+    const notPlayedList = document.getElementById('notPlayedList');
+    const statusMsg = document.getElementById('statusMsg');
+    const handDiv = document.getElementById('hand');
+    const tzarContainer = document.getElementById('tzarContainer');
+    const choicesDiv = document.getElementById('choices');
+    const playedCardsArea = document.getElementById('playedCardsArea');
+    const playedCardsDiv = document.getElementById('playedCards');
+    const nextRoundBtn = document.getElementById('nextRoundBtn');
+
+    /***************************************************
+     * Local State
+     ***************************************************/
+    let myUid = null;
+    let isTzar = false;
+    let iAmHost = false;
+    let roundActive = false;
+
+    /***************************************************
+     * Cookie-based UID
+     ***************************************************/
+    function getCookieValue(name) {
+      let match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+      return match ? match[2] : null;
+    }
+    function setCookieValue(name, value) {
+      document.cookie = `${name}=${value}; path=/; max-age=31536000`;
+    }
+    function generateUid() {
+      return Math.random().toString(36).substr(2,9);
+    }
+
+    // On load, we either find or create a "uid" cookie
+    window.addEventListener('load', () => {
+      let existingUid = getCookieValue('uid');
+      if (!existingUid) {
+        existingUid = generateUid();
+        setCookieValue('uid', existingUid);
+      }
+      myUid = existingUid;
+      console.log('My UID:', myUid);
+    });
+
+    /***************************************************
+     * Socket Connections
+     ***************************************************/
+    socket.on('connect', () => {
+      // On connect, we send a "hello" with our uid but no name yet
+      socket.emit('helloWithUid', { uid: myUid, desiredName: '' });
+    });
+
+    joinBtn.addEventListener('click', () => {
+      const name = usernameInput.value.trim();
+      if (!name) return;
+      socket.emit('helloWithUid', { uid: myUid, desiredName: name });
+    });
+
+    renameBtn.addEventListener('click', () => {
+      const newName = renameInput.value.trim();
+      if (!newName) return;
+      socket.emit('updateName', newName);
+      renameInput.value = '';
+    });
+
+    roundBtn.addEventListener('click', () => {
+      socket.emit('startRound');
+    });
+    nextRoundBtn.addEventListener('click', () => {
+      socket.emit('startRound');
+    });
+
+    /***************************************************
+     * LISTENERS from server
+     ***************************************************/
+    socket.on('players', (playersArr) => {
+      // Check if I'm in
+      let me = playersArr.find(p => p.uid === myUid);
+      if (!me) return;
+
+      // Show the players section
+      loginSection.classList.add('hidden');
+      playersSection.classList.remove('hidden');
+
+      // Render players
+      playersList.innerHTML = '';
+      isTzar = false;
+      iAmHost = false;
+      playersArr.forEach(p => {
+        let line = p.username;
+        if (p.isHost) line += ' (Host)';
+        if (p.isTzar) line += ' (Tzar)';
+        line += ` score: ${p.score}`;
+        if (p.isSpectator) line += ' (Spectator)';
+
+        let li = document.createElement('li');
+        li.textContent = line;
+        playersList.appendChild(li);
+
+        if (p.uid === myUid && p.isHost) iAmHost = true;
+        if (p.uid === myUid && p.isTzar) isTzar = true;
+      });
+
+      // If I'm host and round not active
+      if (iAmHost && !roundActive) {
+        roundBtn.classList.remove('hidden');
+      } else {
+        roundBtn.classList.add('hidden');
+      }
+
+      updateScoreboard(playersArr);
+    });
+
+    socket.on('roundStarted', data => {
+      roundActive = true;
+      isTzar = (myUid === data.tzarUid);
+
+      playersSection.classList.add('hidden');
+      gameSection.classList.remove('hidden');
+
+      blackCardDiv.textContent = data.blackCard || '???';
+      tzarBanner.classList.add('hidden');
+      tzarContainer.classList.add('hidden');
+      playedCardsArea.classList.add('hidden');
+      playedCardsDiv.innerHTML = '';
+      choicesDiv.innerHTML = '';
+      notPlayedYetArea.classList.add('hidden');
+      notPlayedList.innerHTML = '';
+      statusMsg.textContent = '';
+      nextRoundBtn.classList.add('hidden');
+
+      if (isTzar) {
+        tzarBanner.classList.remove('hidden');
+      }
+    });
+
+    socket.on('yourHand', cards => {
+      if (isTzar) {
+        handDiv.innerHTML = `<p>You are the Tzar this round, no hand for you.</p>`;
+      } else {
+        renderHand(cards);
+      }
+    });
+
+    socket.on('youAreReady', () => {
+      handDiv.innerHTML = `<p style="font-style:italic;color:#666;">You have played. Waiting for others...</p>`;
+    });
+
+    socket.on('notPlayedYet', arr => {
+      if (!roundActive || !arr.length) {
+        notPlayedYetArea.classList.add('hidden');
+        notPlayedList.innerHTML = '';
+        return;
+      }
+      notPlayedYetArea.classList.remove('hidden');
+      notPlayedList.innerHTML = '';
+      arr.forEach(u => {
+        let li = document.createElement('li');
+        li.textContent = u.username;
+        notPlayedList.appendChild(li);
+      });
+    });
+
+    socket.on('allCardsIn', data => {
+      if (isTzar) {
+        tzarContainer.classList.remove('hidden');
+        choicesDiv.innerHTML = '';
+        data.playedCards.forEach(pc => {
+          let div = document.createElement('div');
+          div.classList.add('card', 'whitecard');
+          div.textContent = pc.cardText;
+          div.onclick = () => {
+            socket.emit('pickWinner', pc.uid);
+          };
+          choicesDiv.appendChild(div);
+        });
+      } else {
+        playedCardsArea.classList.remove('hidden');
+        playedCardsDiv.innerHTML = '';
+        data.playedCards.forEach(pc => {
+          let d = document.createElement('div');
+          d.classList.add('card', 'whitecard');
+          d.textContent = pc.cardText;
+          playedCardsDiv.appendChild(d);
+        });
+      }
+      notPlayedYetArea.classList.add('hidden');
+      notPlayedList.innerHTML = '';
+    });
+
+    socket.on('roundEnded', data => {
+      roundActive = false;
+      if (data.winnerName && data.winningCard) {
+        statusMsg.innerHTML = `
+          <p><strong>Question:</strong> ${data.blackCard}</p>
+          <p><strong>Winner:</strong> ${data.winnerName} with "<em>${data.winningCard}</em>"</p>
+        `;
+      } else {
+        statusMsg.textContent = `Round ended without a winner. [Q: ${data.blackCard}]`;
+      }
+      if (iAmHost) {
+        nextRoundBtn.classList.remove('hidden');
+      }
+    });
+
+    /***************************************************
+     * HELPER FUNCS
+     ***************************************************/
+    function renderHand(cards) {
+      handDiv.innerHTML = '';
+      cards.forEach(ct => {
+        let c = document.createElement('div');
+        c.classList.add('card', 'whitecard');
+        c.textContent = ct;
+        c.addEventListener('click', () => {
+          socket.emit('playCard', ct);
+        });
+        handDiv.appendChild(c);
+      });
+    }
+
+    function updateScoreboard(playersArr) {
+      scoreboardDiv.innerHTML = '';
+      let me = playersArr.find(p => p.uid === myUid);
+      if (!me) {
+        scoreboardDiv.textContent = 'No data.';
+        return;
+      }
+      if (isTzar || iAmHost) {
+        playersArr.forEach(p => {
+          scoreboardDiv.innerHTML += `<div>${p.username}: ${p.score}</div>`;
+        });
+      } else {
+        scoreboardDiv.textContent = `Your score: ${me.score}`;
+      }
+    }
+  </script>
+</body>
+</html>

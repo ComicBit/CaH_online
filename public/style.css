@@ -1,0 +1,131 @@
+/* Basic reset & layout */
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f9f9f9;
+}
+header {
+  background: #333;
+  color: #fff;
+  padding: 16px;
+  text-align: center;
+}
+h1 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+/* scoreboard top-right */
+#scoreboard {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: #fff;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  padding: 8px 12px;
+  min-width: 120px;
+  font-size: 0.95rem;
+  box-shadow: 0 0 5px rgba(0,0,0,0.1);
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 10px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+button {
+  background: #007bff;
+  color: #fff;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 6px;
+}
+button:hover {
+  background: #0056b3;
+}
+
+section {
+  background: #fff;
+  border: 1px solid #ddd;
+  margin-bottom: 10px;
+  padding: 10px;
+  border-radius: 6px;
+}
+#playersList, #notPlayedList {
+  list-style: none;
+  padding: 0;
+}
+
+/* Cards: unique, once dealt, removed from deck */
+.cardGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.card {
+  position: relative;
+  width: 160px;
+  min-height: 200px;
+  padding: 16px;
+  border: 1px solid #000;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  overflow: hidden;
+  font-size: 1rem;
+  line-height: 1.3em;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+}
+.card:hover {
+  background: #e5e5e5;
+}
+.whitecard {
+  background: #fff;
+  color: #000;
+}
+.blackcard {
+  background: #000;
+  color: #fff;
+}
+.whitecard::after,
+.blackcard::after {
+  content: "Cards Against Humanity";
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  font-size: 0.8rem;
+  opacity: 0.7;
+}
+
+/* Tzar Banner */
+#tzarBanner {
+  background: #ffd700;
+  padding: 6px;
+  margin-top: 8px;
+  font-weight: bold;
+  border: 1px dashed #888;
+}
+
+/* For mobile, smaller cards, ~3 across */
+@media(max-width:600px) {
+  .card {
+    width: 30%;
+    min-height: 160px;
+    padding: 10px;
+    font-size: 0.9rem;
+  }
+}

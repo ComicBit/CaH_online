@@ -1,0 +1,8 @@
+
+.DS_Store
+
+node_modules/
+
+cards-toomuch.json
+
+cards-small.json
